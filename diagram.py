@@ -1,6 +1,9 @@
 from graphviz import Digraph
+import re
 
 class RegexperStyleDiagram:
+    REGEX_PATTERN = r'^[a-zA-Z()*+|]+$'
+
     def __init__(self):
         self.dot = Digraph(graph_attr={'rankdir': 'LR'})
         self.node_id = 0
@@ -54,7 +57,7 @@ class RegexperStyleDiagram:
                     self._process_expr(group_content, group_entry, group_exit, g)
 
                     if j + 1 < len(expr) and expr[j + 1] in '*+':
-                        apply_quantifier(g, group_exit, expr[j + 1])
+                        apply_quantifier(g, group_exit, group_entry, expr[j + 1], is_group=True)
                         i = j + 1
                     else:
                         i = j
@@ -64,11 +67,12 @@ class RegexperStyleDiagram:
                 elif c.isalpha():
                     char_node = self.new_node(c)
                     g.edge(prev, char_node)
-                    prev = char_node
 
                     if i + 1 < len(expr) and expr[i + 1] in '*+':
-                        apply_quantifier(g, char_node, expr[i + 1])
+                        apply_quantifier(g, char_node, prev, expr[i + 1], is_group=False)
                         i += 1
+
+                    prev = char_node
                 i += 1
 
             g.edge(prev, exit)
@@ -90,19 +94,24 @@ def logical_or(expr: str) -> list[str]:
     parts.append(current)
     return parts
 
-def apply_quantifier(g: Digraph, node: str, quantifier: str):
-    if quantifier == '+':
-        g.edge(node, node, label='+')
-    elif quantifier == '*':
-        g.edge(node, node, label='*')
+def apply_quantifier(g: Digraph, current_node: str, prev_node: str, quantifier: str, is_group: bool):
+    if quantifier in ('*', '+'):
+        if is_group:
+            g.edge(current_node, prev_node, label=quantifier, constraint='false')
+        else:
+            g.edge(current_node, current_node, label=quantifier, constraint='false')
 
 def user_input():
     regex_input = input("Enter a simple regular expression (supports a-z, *, +, |, () ): ")
+    if not re.match(RegexperStyleDiagram.REGEX_PATTERN, regex_input):
+        print("Error: Invalid characters detected!")
+        return user_input()
+
     try:
         diagram = RegexperStyleDiagram()
         return diagram.build(regex_input)
     except Exception as e:
-        print("Error:", e)
+        print("Error during processing:", e)
         return user_input()
 
 def create_pdf(graph):
